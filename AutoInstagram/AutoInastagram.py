@@ -1,16 +1,13 @@
 # autoInstagram is an script for automating instagram tasks
 # developed by @mRashvand
-import time
 import sys
 import pathlib
-import getpass
 import re
-import requests
-import json
-from datetime import datetime
+from time import sleep
 from typing import Dict
-import random as rand
-# import threading
+from download import Download
+from login import Login
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -21,14 +18,6 @@ from selenium.webdriver.remote.webdriver import WebDriver
 
 
 class AutoInastagram():
-
-   user_agents = ['Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0',
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0',
-                  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36',
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36']
-                  
-   BASE_URL = 'https://www.instagram.com/accounts/login/'
-
 
    def __init__(self, args):
       self.args = args
@@ -46,12 +35,12 @@ class AutoInastagram():
       options_pattern = [r'(?:--pass|-p)\s(?P<PASS>.+?)(?= -)',  # password used in autification
                          r'(?:--user|-u)\s(?P<USER>[\w.]{0,29})\s', # username used in autification 
                          r'(?:--list)\s(?P<LIST>.+\.txt)', # get input file path that contains instagram urls
-                         r'(?P<COMMAND>--download|-d)\s(?P<D_Count>\d+)?', # download the post media from url or a user's  post
-                         r'(?P<COMMAND>--follow|-f)\s', # follow given user(s)
+                         r'(?P<COMMAND>--download|-d)\s?(?P<D_Count>\d+)?', # download the post media from url or a user's  post
+                         r'(?P<COMMAND>--follow|-f)\s?', # follow given user(s)
                          r'(?:--output|-o)\s(?P<OUT>.+)\s']
                          
-      operand_pattern = [r'(?!.*\.$)[^\W](?P<INSTA_USER>[\w.]{0,29})', # get single instagram username
-                         r'(?:(?:http|https):\/\/)(?:www.)?(?:instagram.com|instagr.am|instagr.com)\/(?P<POSTFLAG>p\/)?(?P<ID>[\w.]+)', # get instagram username or post id
+      operand_pattern = [r'@(?!.*\.$)[^\W](?P<INSTA_USER>[\w.]{0,29})', # get single instagram username
+                         r'(?:(?:http|https):\/\/)(?:www.)?(?:instagram.com|instagr.am|instagr.com)\/((?P<POSTFLAG>p)\/)?(?P<ID>[\w.]+)', # get instagram username or post id
                          r'(?P<FILE>.+\.txt)'] 
       operand_pattern = '^' + '|'.join(operand_pattern) + '$'
 
@@ -68,50 +57,11 @@ class AutoInastagram():
       for key, val in operand_match.groupdict().items():
          if val is not None:
             result[key] = val
-      
+      print(result)
+      sleep(5)
       return result
       
-   def login(self, username: str, password: str):
-      time = int(datetime.now().timestamp())
-      response = requests.get(self.BASE_URL)
-      csrf = response.cookies['csrftoken']
-
-      payload = {
-         'username': username,
-         'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{time}:' + password,
-         'queryParams': {},
-         'optIntoOneTap': 'false'
-      }
       
-      header = {
-         'User-Agent': self.user_agents[rand.randint(0,3)],
-         'X-Requested-With': 'XMLHttpRequest',
-         'Referer': self.BASE_URL,
-         'x-csrftoken': csrf
-      }
-
-      login_response = requests.post(
-         self.BASE_URL + 'ajax/', data=payload, headers=header)
-      json_data = json.loads(login_response.text)
-
-      print(login_response.text)
-      if json_data["authenticated"]:
-         print("successful login.")
-         
-         self.cookies = login_response.cookies.get_dict()
-         return True
-      else:
-         print("login failed.")
-
-         if not json_data['user']:
-            print(f"User '{username}', is not found")
-         elif not json_data["authenticated"]:
-            print(f'Wrong password.')
-         else:
-            print(json_data['status'])
-         return False
-      
-
    def selenium(self):
       print("Starting the Browser ...")
       self.driver = webdriver.Chrome(
@@ -127,24 +77,28 @@ class AutoInastagram():
       
 
    def arg_handler(self, args):
-      succesful = self.login(args['USER'], args['PASS'])
+      # TODO ADD MORE COMMANDS 
 
-      if not succesful:
+      if not 'COMMAND' in args:
+         print('No Cammand provided')
          return
-      
-      # TODO ADD COMMANDS 
 
       if args['COMMAND'] == '--download' or args['COMMAND'] == '-d':
-         pass
+         d = Download(args['ID'], args['OUT'])
+         d.download()
               
       else:
          pass
 
    def start(self):
       parsed_args = self.parse(' '.join(self.args[:-1]), self.args[-1])
-      print(parsed_args)
-      self.arg_handler(parsed_args)
-   {'PASS': '55sdl 5', 'USER': 'sdasd', 'INSTAUSER': 'ijsjidvff'}
+
+      l = Login(parsed_args['USER'], parsed_args['PASS'])
+      is_authenticated, cookies, user_agent = l.login()
+      if is_authenticated:
+         self.cookies = cookies
+         self.user_agent = user_agent
+         self.arg_handler(parsed_args)
 
 # testing 
 ai = AutoInastagram(sys.argv[1:])
